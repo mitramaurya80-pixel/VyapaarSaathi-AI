@@ -51,6 +51,24 @@ function WaveformBars({ active }) {
   );
 }
 
+// Reverse mapping: speech lang code -> app language name
+const SPEECH_LANG_MAP = {
+  "en-US": "English",
+  "en": "English",
+  "hi-IN": "Hindi",
+  "hi": "Hindi",
+  "ta-IN": "Tamil",
+  "ta": "Tamil",
+  "bn-IN": "Bengali",
+  "bn": "Bengali",
+  "te-IN": "Telugu",
+  "te": "Telugu",
+  "es-ES": "Spanish",
+  "es": "Spanish",
+  "fr-FR": "French",
+  "fr": "French",
+};
+
 function AISummaryPage() {
   const [question, setQuestion] = useState("");
   const [language, setLanguage] = useState("English");
@@ -60,8 +78,127 @@ function AISummaryPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [speakEnabled, setSpeakEnabled] = useState(true);
   const [lastAsked, setLastAsked] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [listeningStatus, setListeningStatus] = useState("");
 
   const utteranceRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      console.warn("Speech Recognition not supported in this browser");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+    recognition.lang = LANGUAGE_CODES[language] || "en-US";
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setListeningStatus("Listening...");
+      setError("");
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+      let isFinal = false;
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const current = event.results[i][0]?.transcript || "";
+        transcript += current;
+        isFinal = event.results[i].isFinal;
+      }
+
+      if (transcript) {
+        setQuestion(transcript);
+        setListeningStatus(isFinal ? "Processing..." : "Listening...");
+      }
+
+      if (isFinal) {
+        const detectedLang = detectLanguage(transcript, recognition.lang);
+        setLanguage(detectedLang);
+        setIsRecording(false);
+        setListeningStatus("");
+
+        setTimeout(() => {
+          handleAsk(transcript, detectedLang);
+        }, 100);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      setError(`Mic error: ${event.error}`);
+      setIsRecording(false);
+      setListeningStatus("");
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      setListeningStatus("");
+    };
+
+    return () => {
+      window.speechSynthesis.cancel();
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {
+          // Ignore abort errors
+        }
+      }
+    };
+  }, []);
+
+  const detectLanguage = (transcript, langFromAPI) => {
+    // First try API's detected language
+    if (langFromAPI) {
+      const fullLang = langFromAPI;
+      const shortLang = fullLang.split("-")[0];
+
+      if (SPEECH_LANG_MAP[fullLang]) return SPEECH_LANG_MAP[fullLang];
+      if (SPEECH_LANG_MAP[shortLang]) return SPEECH_LANG_MAP[shortLang];
+    }
+
+    // Fallback: simple keyword detection
+    const text = transcript.toLowerCase();
+    if (/नमस्ते|आप|क्या|कैसे/.test(text)) return "Hindi";
+    if (/வணக்கம்|உங்கள்|என்ன/.test(text)) return "Tamil";
+    if (/স্বাগত|আপনি|কি/.test(text)) return "Bengali";
+    if (/హలో|మీ|ఏ/.test(text)) return "Telugu";
+    if (/hola|cómo|está/.test(text)) return "Spanish";
+    if (/bonjour|comment|etes/.test(text)) return "French";
+
+    return "English"; // Default
+  };
+
+  const toggleMic = () => {
+    if (!recognitionRef.current) {
+      setError("Speech Recognition not supported in this browser");
+      return;
+    }
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+      return;
+    }
+
+    setError("");
+    recognitionRef.current.lang = LANGUAGE_CODES[language] || "en-US";
+
+    try {
+      recognitionRef.current.start();
+    } catch (err) {
+      console.error("Failed to start recognition:", err);
+      setError("Failed to start microphone. Please check permissions.");
+    }
+  };
 
   useEffect(() => {
     return () => {
@@ -177,7 +314,7 @@ function AISummaryPage() {
     }
   };
 
-  const handleAsk = async (customQuestion = question) => {
+  const handleAsk = async (customQuestion = question, customLanguage = language) => {
     const prompt = customQuestion.trim();
     if (!prompt) return;
 
@@ -186,12 +323,14 @@ function AISummaryPage() {
     setResponse("");
     setLoading(true);
     setLastAsked(prompt);
+    
+    const langToUse = customLanguage || language;
 
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: prompt, language }),
+        body: JSON.stringify({ question: prompt, language: langToUse }),
       });
 
       if (!res.ok) {
@@ -203,7 +342,7 @@ function AISummaryPage() {
       setResponse(data.answer);
 
       if (speakEnabled && data.answer) {
-        setTimeout(() => speakText(data.answer, language), 300);
+        setTimeout(() => speakText(data.answer, langToUse), 300);
       }
     } catch (err) {
       setError(
@@ -233,118 +372,151 @@ function AISummaryPage() {
         }
       `}</style>
 
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="min-h-screen bg-gray-50">
         <Navbar />
 
-        <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-          {/* HERO */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-8 text-white shadow-xl mb-8">
-            <div className="absolute top-0 right-0 w-72 h-72 bg-white/10 rounded-full blur-3xl -translate-y-20 translate-x-20" />
-            <div className="absolute bottom-0 left-0 w-52 h-52 bg-cyan-300/10 rounded-full blur-3xl translate-y-20 -translate-x-10" />
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+          
+          {/* TODAY'S BUSINESS HEALTH STRIP */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+            <h2 className="text-sm font-semibold text-gray-700 mb-3">Today's Business Health</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <span className="text-2xl">
+                  {analytics.insightCards[0].value.includes("₹") && parseFloat(analytics.insightCards[0].value.replace("₹", "").replace(/,/g, "")) > 10000
+                    ? "🟢"
+                    : analytics.insightCards[0].value.includes("₹") && parseFloat(analytics.insightCards[0].value.replace("₹", "").replace(/,/g, "")) > 5000
+                    ? "🟡"
+                    : "🔴"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 truncate">Sales</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {analytics.insightCards[0].value}
+                  </p>
+                </div>
+              </div>
 
-            <div className="relative z-10">
-              <p className="uppercase tracking-[0.25em] text-xs text-blue-100 mb-3 font-semibold">
-                Smart Merchant Intelligence
-              </p>
-              <h1 className="text-3xl sm:text-5xl font-bold leading-tight">
-                VyapaarSathi <span className="text-cyan-200">AI</span>
-              </h1>
-              <p className="mt-3 text-blue-100 max-w-2xl text-sm sm:text-base leading-relaxed">
-                AI-powered multilingual business assistant with real merchant insights,
-                voice playback, and smart store analytics.
-              </p>
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <span className="text-2xl">{analytics.lowStockCount > 0 ? "⚠️" : "✅"}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 truncate">Low Stock</p>
+                  <p className="text-sm font-semibold text-gray-900">{analytics.lowStockCount} items</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <span className="text-2xl">⏰</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 truncate">Peak Hour</p>
+                  <p className="text-sm font-semibold text-gray-900">{analytics.insightCards[1].value}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <span className="text-2xl">🔁</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 truncate">Repeat Cust</p>
+                  <p className="text-sm font-semibold text-gray-900">{analytics.insightCards[3].value}</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* REAL INSIGHT CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
-            {analytics.insightCards.map((card) => (
-              <div
-                key={card.title}
-                className="bg-white/80 backdrop-blur-xl border border-white/60 shadow-sm rounded-2xl p-5 hover:shadow-md transition"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm text-gray-500">{card.title}</p>
-                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{card.value}</h3>
-                    <p className="text-xs text-gray-400 mt-2">{card.note}</p>
-                  </div>
-                  <div className="text-2xl">{card.icon}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* CHARTS */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
-            <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-gray-200 p-5">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Daily Sales Trend</h3>
-                <p className="text-sm text-gray-500">Track performance across the week</p>
-              </div>
-              <div className="h-72">
+          {/* CHARTS SECTION */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Weekly Sales Trend</h3>
+              <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analytics.dailySales}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="day" />
-                    <YAxis />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="sales" strokeWidth={3} />
+                  <LineChart data={analytics.dailySales} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }} />
+                    <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} dot={{ fill: "#3b82f6", r: 4 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-gray-200 p-5">
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Category Revenue</h3>
-                <p className="text-sm text-gray-500">Which product segments are performing best</p>
-              </div>
-              <div className="h-72">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Revenue by Category</h3>
+              <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.categoryChartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="revenue" radius={[10, 10, 0, 0]} />
+                  <BarChart data={analytics.categoryChartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }} />
+                    <Bar dataKey="revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
 
-          {/* MAIN LAYOUT */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {/* LEFT */}
-            <div className="xl:col-span-2 space-y-6">
-              {/* INPUT */}
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-gray-200 p-5 sm:p-6">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-10 h-10 rounded-2xl bg-blue-100 flex items-center justify-center text-lg">
-                    🤖
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900">Ask your AI business assistant</h2>
-                    <p className="text-sm text-gray-500">Get practical advice instantly</p>
-                  </div>
-                </div>
+          {/* MAIN CONTENT */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* LEFT COLUMN - AI ASSISTANT */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* ASK BUSINESS ASSISTANT */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h2 className="text-sm font-semibold text-gray-900 mb-3">Ask About Your Business</h2>
 
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col sm:flex-row gap-3">
+                <div className="space-y-3">
+                  {/* Input Row */}
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="text"
-                      placeholder="Ask about sales, stock, customers..."
+                      placeholder="Ask anything..."
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      className="flex-1 border border-gray-200 rounded-2xl px-5 py-4 text-sm outline-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition bg-gray-50"
+                      className="flex-1 border border-gray-300 rounded-lg px-4 py-2.5 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition bg-white"
                     />
 
+                    <button
+                      onClick={toggleMic}
+                      disabled={loading}
+                      className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition whitespace-nowrap ${
+                        isRecording
+                          ? "bg-red-500 hover:bg-red-600 text-white"
+                          : "bg-gray-200 hover:bg-gray-300 text-gray-900"
+                      }`}
+                    >
+                      {isRecording ? (
+                        <>
+                          <span className="animate-pulse">🎤</span> Stop
+                        </>
+                      ) : (
+                        <>🎙️ Voice</>
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => handleAsk()}
+                      disabled={loading || !question.trim()}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition whitespace-nowrap"
+                    >
+                      {loading ? "Asking..." : "Ask"}
+                    </button>
+                  </div>
+
+                  {/* Listening Status */}
+                  {listeningStatus && (
+                    <div className="flex items-center gap-2 text-xs text-blue-700 bg-blue-50 px-3 py-2 rounded-lg">
+                      <span className="animate-pulse">●</span>
+                      {listeningStatus}
+                    </div>
+                  )}
+
+                  {/* Language & Voice Settings */}
+                  <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
                     <select
                       value={language}
                       onChange={(e) => setLanguage(e.target.value)}
-                      className="border border-gray-200 rounded-2xl px-4 py-4 text-sm text-gray-700 outline-none focus:border-blue-400 bg-white min-w-[160px]"
+                      className="border border-gray-300 rounded-lg px-3 py-2 text-xs font-medium text-gray-700 outline-none focus:border-blue-400 bg-white"
                     >
                       {LANGUAGES.map((l) => (
                         <option key={l}>{l}</option>
@@ -352,95 +524,87 @@ function AISummaryPage() {
                     </select>
 
                     <button
-                      onClick={() => handleAsk()}
-                      disabled={loading || !question.trim()}
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:opacity-95 disabled:opacity-50 text-white text-sm font-semibold px-6 py-4 rounded-2xl transition whitespace-nowrap shadow-sm"
+                      onClick={() => setSpeakEnabled((v) => !v)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition ${
+                        speakEnabled
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : "bg-gray-100 text-gray-600 border border-gray-300"
+                      }`}
                     >
-                      {loading ? "Thinking..." : "✨ Ask AI"}
+                      🔊 {speakEnabled ? "On" : "Off"}
                     </button>
-                  </div>
 
-                  <div className="flex items-center justify-between flex-wrap gap-3 pt-2">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setSpeakEnabled((v) => !v)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          speakEnabled ? "bg-blue-500" : "bg-gray-300"
-                        }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                            speakEnabled ? "translate-x-6" : "translate-x-1"
-                          }`}
-                        />
-                      </button>
-                      <span className="text-sm text-gray-500">🔊 Speak response aloud</span>
-                    </div>
-
-                    <div className="text-xs text-gray-400 bg-gray-50 px-3 py-1.5 rounded-full border">
-                      Language: <span className="font-medium text-gray-600">{language}</span>
-                    </div>
+                    <span className="text-xs text-gray-500 py-2">AI responds in {language}</span>
                   </div>
 
                   {error && (
-                    <p className="text-red-500 text-sm mt-2 bg-red-50 rounded-xl px-4 py-3 border border-red-100">
+                    <p className="text-red-600 text-xs bg-red-50 rounded-lg px-3 py-2 border border-red-200">
                       {error}
                     </p>
                   )}
                 </div>
               </div>
 
-              {/* CHAT */}
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-gray-200 p-5 sm:p-6 min-h-[420px]">
-                <div className="flex items-center justify-between mb-5">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Conversation</h2>
-                    <p className="text-sm text-gray-500">Your assistant replies appear here</p>
-                  </div>
-
-                  {response && (
-                    <div className="flex items-center gap-3">
-                      {isPlaying && <WaveformBars active={isPlaying} />}
-                      <button
-                        onClick={toggleAudio}
-                        className={`flex items-center gap-2 text-xs font-medium px-4 py-2 rounded-full border transition ${
-                          isPlaying
-                            ? "bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
-                            : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-                        }`}
-                      >
-                        {isPlaying ? "⏸ Pause" : "▶ Play voice"}
-                      </button>
-                    </div>
-                  )}
+              {/* QUICK ACTION BUTTONS */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Common Business Questions</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handleAsk("Why are my sales low today?")}
+                    disabled={loading}
+                    className="text-left text-xs bg-gray-50 hover:bg-blue-50 text-gray-700 px-3 py-2.5 rounded-lg transition disabled:opacity-50 border border-gray-200 font-medium"
+                  >
+                    📉 Why are sales low?
+                  </button>
+                  <button
+                    onClick={() => handleAsk("What items should I restock?")}
+                    disabled={loading}
+                    className="text-left text-xs bg-gray-50 hover:bg-blue-50 text-gray-700 px-3 py-2.5 rounded-lg transition disabled:opacity-50 border border-gray-200 font-medium"
+                  >
+                    📦 What to restock?
+                  </button>
+                  <button
+                    onClick={() => handleAsk("When is my peak business time?")}
+                    disabled={loading}
+                    className="text-left text-xs bg-gray-50 hover:bg-blue-50 text-gray-700 px-3 py-2.5 rounded-lg transition disabled:opacity-50 border border-gray-200 font-medium"
+                  >
+                    ⏰ Peak time?
+                  </button>
+                  <button
+                    onClick={() => handleAsk("How many repeat customers do I have?")}
+                    disabled={loading}
+                    className="text-left text-xs bg-gray-50 hover:bg-blue-50 text-gray-700 px-3 py-2.5 rounded-lg transition disabled:opacity-50 border border-gray-200 font-medium"
+                  >
+                    🔁 Repeat customers?
+                  </button>
                 </div>
+              </div>
 
+              {/* RESPONSE AREA */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 min-h-[280px]">
                 {!response && !loading && (
-                  <div className="h-full flex flex-col items-center justify-center text-center py-20 text-gray-400">
-                    <div className="w-16 h-16 rounded-3xl bg-blue-50 flex items-center justify-center text-3xl mb-4">
-                      💬
-                    </div>
-                    <p className="text-base font-medium text-gray-500">No conversation yet</p>
-                    <p className="text-sm mt-1">Ask a question to get business insights instantly</p>
+                  <div className="h-full flex flex-col items-center justify-center text-center py-12">
+                    <div className="text-3xl mb-2">💬</div>
+                    <p className="text-sm font-medium text-gray-600">No response yet</p>
+                    <p className="text-xs text-gray-500 mt-1">Ask a question to get insights</p>
                   </div>
                 )}
 
                 {loading && (
-                  <div className="space-y-5">
+                  <div className="space-y-3">
                     {lastAsked && (
                       <div className="flex justify-end">
-                        <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-sm">
+                        <div className="max-w-xs bg-blue-600 text-white rounded-lg px-3 py-2 text-sm">
                           {lastAsked}
                         </div>
                       </div>
                     )}
-
                     <div className="flex justify-start">
-                      <div className="max-w-[80%] bg-gray-100 rounded-2xl rounded-bl-md px-4 py-4 shadow-sm">
+                      <div className="bg-gray-100 rounded-lg px-3 py-3">
                         <div className="space-y-2 animate-pulse">
-                          <div className="h-4 bg-gray-200 rounded w-52" />
-                          <div className="h-4 bg-gray-200 rounded w-64" />
-                          <div className="h-4 bg-gray-200 rounded w-40" />
+                          <div className="h-3 bg-gray-300 rounded w-48" />
+                          <div className="h-3 bg-gray-300 rounded w-56" />
+                          <div className="h-3 bg-gray-300 rounded w-40" />
                         </div>
                       </div>
                     </div>
@@ -448,85 +612,98 @@ function AISummaryPage() {
                 )}
 
                 {response && !loading && (
-                  <div className="space-y-5">
+                  <div className="space-y-3">
                     <div className="flex justify-end">
-                      <div className="max-w-[80%] bg-blue-600 text-white rounded-2xl rounded-br-md px-4 py-3 text-sm shadow-sm">
+                      <div className="max-w-xs bg-blue-600 text-white rounded-lg px-4 py-2 text-sm">
                         {lastAsked}
                       </div>
                     </div>
 
                     <div className="flex justify-start">
-                      <div className="max-w-[85%] bg-gray-100 text-gray-800 rounded-2xl rounded-bl-md px-5 py-4 shadow-sm border border-gray-200">
-                        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
-                          <span className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
-                            🤖
-                          </span>
-                          VyapaarSathi AI
-                        </div>
-                        <p className="text-[15px] leading-relaxed whitespace-pre-wrap">
+                      <div className="bg-gray-100 rounded-lg px-4 py-3 max-w-lg">
+                        <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
                           {response}
                         </p>
                       </div>
                     </div>
+
+                    {response && (
+                      <div className="flex justify-start pt-2">
+                        <button
+                          onClick={toggleAudio}
+                          className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition ${
+                            isPlaying
+                              ? "bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100"
+                              : "bg-gray-100 border-gray-300 text-gray-700 hover:bg-gray-200"
+                          }`}
+                        >
+                          {isPlaying ? (
+                            <>
+                              <WaveformBars active={true} /> Pause
+                            </>
+                          ) : (
+                            <>▶️ Play voice</>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
 
-            {/* RIGHT */}
-            <div className="space-y-6">
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-gray-200 p-5">
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">Quick Questions</h3>
-                <p className="text-sm text-gray-500 mb-4">Tap to ask common merchant questions</p>
-
-                <div className="flex flex-col gap-3">
-                  {QUICK_QUESTIONS.map((q) => (
-                    <button
-                      key={q}
-                      onClick={() => handleAsk(q)}
-                      disabled={loading}
-                      className="text-left text-sm bg-gray-50 hover:bg-blue-50 hover:border-blue-200 text-gray-700 px-4 py-3 rounded-2xl transition disabled:opacity-50 border border-gray-200"
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-sm border border-gray-200 p-5">
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">Store Snapshot</h3>
-                <p className="text-sm text-gray-500 mb-4">Quick business status overview</p>
-
-                <div className="space-y-3">
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl px-4 py-3 text-sm text-gray-700">
-                    🏪 {analytics.merchantInfo.name || "Merchant Store"}
+            {/* RIGHT COLUMN - STORE STATUS */}
+            <div className="space-y-4">
+              {/* STORE STATUS */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-900 mb-3">Store Status</h3>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-lg">🏪</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Store Name</p>
+                      <p className="font-semibold text-gray-900 text-sm">{analytics.merchantInfo.name || "Your Store"}</p>
+                    </div>
                   </div>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl px-4 py-3 text-sm text-gray-700">
-                    📍 {analytics.merchantInfo.location || "Location not available"}
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-lg">📍</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Location</p>
+                      <p className="font-semibold text-gray-900 text-sm">{analytics.merchantInfo.location || "Not set"}</p>
+                    </div>
                   </div>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl px-4 py-3 text-sm text-gray-700">
-                    ⚠️ {analytics.lowStockCount} low-stock items need attention
-                  </div>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl px-4 py-3 text-sm text-gray-700">
-                    📊 AI + Analytics enabled
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-lg">📦</span>
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Top Category</p>
+                      <p className="font-semibold text-gray-900 text-sm">{analytics.insightCards[2].value}</p>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-3xl p-5 shadow-lg">
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-10 h-10 rounded-2xl bg-white/10 flex items-center justify-center">
-                    🔊
-                  </div>
-                  <div>
-                    <h3 className="font-semibold">Voice Assistant</h3>
-                    <p className="text-xs text-slate-300">Multilingual playback enabled</p>
-                  </div>
+              {/* ALERTS & ACTIONS */}
+              {analytics.lowStockCount > 0 && (
+                <div className="bg-yellow-50 rounded-lg shadow-sm border border-yellow-200 p-4">
+                  <h4 className="text-sm font-semibold text-yellow-900 mb-2">⚠️ Action Needed</h4>
+                  <p className="text-xs text-yellow-800 mb-3">
+                    {analytics.lowStockCount} item{analytics.lowStockCount !== 1 ? "s" : ""} running low on stock.
+                  </p>
+                  <button
+                    onClick={() => handleAsk(`I have ${analytics.lowStockCount} items with low stock. What should I do?`)}
+                    disabled={loading}
+                    className="w-full bg-yellow-600 hover:bg-yellow-700 text-white text-xs py-2 rounded-lg font-medium transition"
+                  >
+                    Get Advice
+                  </button>
                 </div>
+              )}
 
-                <p className="text-sm text-slate-300 leading-relaxed">
-                  Your AI assistant can speak responses in the selected language,
-                  making business insights more accessible for local merchants.
+              {/* ABOUT AI */}
+              <div className="bg-blue-50 rounded-lg shadow-sm border border-blue-200 p-4">
+                <h4 className="text-sm font-semibold text-blue-900 mb-2">💡 About AI Assistant</h4>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  Your personal business advisor. Ask about sales, inventory, customers, and trends. Works in {LANGUAGES.length} languages.
                 </p>
               </div>
             </div>

@@ -6,7 +6,7 @@
   },
   "transactions": [
     { "id": 1,  "time": "09:00", "amount": 120,  "category": "Groceries",  "customerType": "new",    "item": "Rice",        "qty": 2  },
-    { "id": 2,  "time": "10:30", "amount": 250,  "category": "Dairy",      "customerType": "repeat", "item": "Milk",        "qty": 5  },
+    { "id": 2,  "time": "10:30", "amount": 2950,  "category": "Dairy",      "customerType": "repeat", "item": "Milk",        "qty": 5  },
     { "id": 3,  "time": "12:00", "amount": 180,  "category": "Snacks",     "customerType": "new",    "item": "Biscuits",    "qty": 3  },
     { "id": 4,  "time": "14:00", "amount": 300,  "category": "Groceries",  "customerType": "repeat", "item": "Dal",         "qty": 4  },
     { "id": 5,  "time": "16:30", "amount": 220,  "category": "Beverages",  "customerType": "new",    "item": "Juice",       "qty": 2  },
@@ -27,7 +27,7 @@
   "inventory": [
     { "item": "Rice",        "category": "Groceries", "stock": 15, "reorderLevel": 20, "unitsSoldThisWeek": 42 },
     { "item": "Dal",         "category": "Groceries", "stock": 22, "reorderLevel": 15, "unitsSoldThisWeek": 28 },
-    { "item": "Milk",        "category": "Dairy",     "stock": 30, "reorderLevel": 25, "unitsSoldThisWeek": 70 },
+    { "item": "Milk",        "category": "Dairy",     "stock": 49, "reorderLevel": 25, "unitsSoldThisWeek": 70 },
     { "item": "Paneer",      "category": "Dairy",     "stock": 8,  "reorderLevel": 10, "unitsSoldThisWeek": 18 },
     { "item": "Biscuits",    "category": "Snacks",    "stock": 45, "reorderLevel": 30, "unitsSoldThisWeek": 55 },
     { "item": "Namkeen",     "category": "Snacks",    "stock": 12, "reorderLevel": 20, "unitsSoldThisWeek": 60 },

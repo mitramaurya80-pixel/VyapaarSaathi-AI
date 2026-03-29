@@ -7,7 +7,9 @@ function Navbar() {
   return (
     <nav className="sticky top-0 bg-white/80 backdrop-blur-md shadow-sm px-4 md:px-8 py-4 z-50">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-blue-600">VyapaarSathi AI</h1>
+        <h1 className="text-3xl font-black bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent italic tracking-tight drop-shadow-sm">
+          VyapaarSathi AI
+        </h1>
 
         <button
           onClick={() => setOpen((prev) => !prev)}
