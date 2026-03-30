@@ -1,17 +1,9 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, Suspense, lazy } from "react";
 import Navbar from "../components/Navbar";
 import merchantData from "../data/merchantData.json";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  BarChart,
-  Bar,
-} from "recharts";
+
+const AISummaryCharts = lazy(() => import("../components/AISummaryCharts"));
+const AISummaryHealthCards = lazy(() => import("../components/AISummaryHealthCards"));
 
 const LANGUAGES = ["English", "Hindi", "Tamil", "Bengali", "Telugu", "Spanish", "French"];
 
@@ -377,84 +369,15 @@ function AISummaryPage() {
 
         <div className="max-w-6xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
           
-          {/* TODAY'S BUSINESS HEALTH STRIP */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-            <h2 className="text-sm font-semibold text-gray-700 mb-3">Today's Business Health</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="text-2xl">
-                  {analytics.insightCards[0].value.includes("₹") && parseFloat(analytics.insightCards[0].value.replace("₹", "").replace(/,/g, "")) > 10000
-                    ? "🟢"
-                    : analytics.insightCards[0].value.includes("₹") && parseFloat(analytics.insightCards[0].value.replace("₹", "").replace(/,/g, "")) > 5000
-                    ? "🟡"
-                    : "🔴"}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 truncate">Sales</p>
-                  <p className="text-sm font-semibold text-gray-900 truncate">
-                    {analytics.insightCards[0].value}
-                  </p>
-                </div>
-              </div>
+          {/* TODAY'S BUSINESS HEALTH STRIP (lazy loaded) */}
+          <Suspense fallback={<div className="text-center text-sm text-gray-500 py-8">Loading overview...</div>}>
+            <AISummaryHealthCards insightCards={analytics.insightCards} lowStockCount={analytics.lowStockCount} />
+          </Suspense>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="text-2xl">{analytics.lowStockCount > 0 ? "⚠️" : "✅"}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 truncate">Low Stock</p>
-                  <p className="text-sm font-semibold text-gray-900">{analytics.lowStockCount} items</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="text-2xl">⏰</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 truncate">Peak Hour</p>
-                  <p className="text-sm font-semibold text-gray-900">{analytics.insightCards[1].value}</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <span className="text-2xl">🔁</span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs text-gray-500 truncate">Repeat Cust</p>
-                  <p className="text-sm font-semibold text-gray-900">{analytics.insightCards[3].value}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* CHARTS SECTION */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Weekly Sales Trend</h3>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={analytics.dailySales} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="day" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip contentStyle={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }} />
-                    <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} dot={{ fill: "#3b82f6", r: 4 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Revenue by Category</h3>
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={analytics.categoryChartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip contentStyle={{ backgroundColor: "#f9fafb", border: "1px solid #e5e7eb" }} />
-                    <Bar dataKey="revenue" fill="#3b82f6" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
+          {/* CHARTS SECTION (lazy loaded) */}
+          <Suspense fallback={<div className="text-center text-sm text-gray-500 py-8">Loading charts...</div>}>
+            <AISummaryCharts dailySales={analytics.dailySales} categoryChartData={analytics.categoryChartData} />
+          </Suspense>
 
           {/* MAIN CONTENT */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
