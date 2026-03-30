@@ -1,0 +1,46 @@
+{
+  "merchantInfo": {
+    "name": "Ravi General Store",
+    "location": "Chennai",
+    "type": "Grocery & Provisions"
+  },
+  "transactions": [
+    { "id": 1,  "time": "09:00", "amount": 120,  "category": "Groceries",  "customerType": "new",    "item": "Rice",        "qty": 2  },
+    { "id": 2,  "time": "10:30", "amount": 2950,  "category": "Dairy",      "customerType": "repeat", "item": "Milk",        "qty": 5  },
+    { "id": 3,  "time": "12:00", "amount": 180,  "category": "Snacks",     "customerType": "new",    "item": "Biscuits",    "qty": 3  },
+    { "id": 4,  "time": "14:00", "amount": 300,  "category": "Groceries",  "customerType": "repeat", "item": "Dal",         "qty": 4  },
+    { "id": 5,  "time": "16:30", "amount": 220,  "category": "Beverages",  "customerType": "new",    "item": "Juice",       "qty": 2  },
+    { "id": 6,  "time": "18:00", "amount": 450,  "category": "Groceries",  "customerType": "repeat", "item": "Rice",        "qty": 6  },
+    { "id": 7,  "time": "19:00", "amount": 700,  "category": "Snacks",     "customerType": "repeat", "item": "Namkeen",     "qty": 8  },
+    { "id": 8,  "time": "20:00", "amount": 650,  "category": "Dairy",      "customerType": "new",    "item": "Paneer",      "qty": 3  },
+    { "id": 9,  "time": "21:00", "amount": 500,  "category": "Beverages",  "customerType": "repeat", "item": "Cold Drinks",  "qty": 10 }
+  ],
+  "dailySales": [
+    { "day": "Mon", "sales": 2200, "footfall": 38 },
+    { "day": "Tue", "sales": 2500, "footfall": 42 },
+    { "day": "Wed", "sales": 2100, "footfall": 35 },
+    { "day": "Thu", "sales": 2800, "footfall": 47 },
+    { "day": "Fri", "sales": 3200, "footfall": 55 },
+    { "day": "Sat", "sales": 3600, "footfall": 63 },
+    { "day": "Sun", "sales": 2900, "footfall": 50 }
+  ],
+  "inventory": [
+    { "item": "Rice",        "category": "Groceries", "stock": 15, "reorderLevel": 20, "unitsSoldThisWeek": 42 },
+    { "item": "Dal",         "category": "Groceries", "stock": 22, "reorderLevel": 15, "unitsSoldThisWeek": 28 },
+    { "item": "Milk",        "category": "Dairy",     "stock": 49, "reorderLevel": 25, "unitsSoldThisWeek": 70 },
+    { "item": "Paneer",      "category": "Dairy",     "stock": 8,  "reorderLevel": 10, "unitsSoldThisWeek": 18 },
+    { "item": "Biscuits",    "category": "Snacks",    "stock": 45, "reorderLevel": 30, "unitsSoldThisWeek": 55 },
+    { "item": "Namkeen",     "category": "Snacks",    "stock": 12, "reorderLevel": 20, "unitsSoldThisWeek": 60 },
+    { "item": "Juice",       "category": "Beverages", "stock": 18, "reorderLevel": 15, "unitsSoldThisWeek": 22 },
+    { "item": "Cold Drinks",  "category": "Beverages", "stock": 9,  "reorderLevel": 20, "unitsSoldThisWeek": 75 }
+  ],
+  "returns": [
+    { "item": "Paneer", "reason": "Expired",  "count": 3 },
+    { "item": "Juice",  "reason": "Damaged",  "count": 1 }
+  ],
+  "customerFeedback": [
+    { "theme": "Stock availability", "sentiment": "negative", "count": 5 },
+    { "theme": "Friendly service",   "sentiment": "positive", "count": 12 },
+    { "theme": "Shop timing",        "sentiment": "negative", "count": 3 }
+  ]
+}
